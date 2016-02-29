@@ -15,64 +15,101 @@ if (file_exists($dbFile))
 if (!is_array($scannedIds))
     $scannedIds = array();
 
-$contentUrl = 'https://www.ss.lv/ru/real-estate/flats/daugavpils-and-reg/daugavpils/hand_over/';
+$contentUrls = [
+    'https://www.ss.lv/lv/real-estate/flats/riga/purvciems/hand_over/filter/',
+    'https://www.ss.lv/lv/real-estate/flats/riga/plyavnieki/hand_over/filter/',
+    'https://www.ss.lv/lv/real-estate/flats/riga/mezhciems/hand_over/filter/',
+    'https://www.ss.lv/lv/real-estate/flats/riga-region/balozi/hand_over/filter/',
+    'https://www.ss.lv/lv/real-estate/flats/riga-region/salaspils/hand_over/filter/',
+    'https://www.ss.lv/lv/real-estate/flats/riga-region/marupes-pag/hand_over/filter/',
+    'https://www.ss.lv/lv/real-estate/flats/riga-region/kekavas-pag/hand_over/filter/'
+];
 
-logMessage('Downloading ' . $contentUrl);
+/*$post = array(
+    'topt[8][min]' => 200,
+    'topt[8][max]' => 350,
+    'topt[1][min]' => 2,
+    'topt[1][max]' => 3,
+    'topt[3][min]' => 45,
+    'topt[3][max]' => 70,
+    'topt[4][min]' => 2
+);*/
+$postStr = 'topt%5B8%5D%5Bmin%5D=200&topt%5B8%5D%5Bmax%5D=350&topt%5B1%5D%5Bmin%5D=2&topt%5B1%5D%5Bmax%5D=3&topt%5B3%5D%5Bmin%5D=45&topt%5B3%5D%5Bmax%5D=70&topt%5B4%5D%5Bmin%5D=&topt%5B4%5D%5Bmax%5D=&opt%5B6%5D=&opt%5B11%5D=';
+/*foreach ($post as $key => $value) {
+    $postStr .= '&'.urlencode($key).'='.urlencode($value);
+}
+if (!empty($postStr))
+    $postStr = substr($postStr, 1);*/
 
-$ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, $contentUrl);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 0); 
-curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-curl_setopt($ch, CURLOPT_FAILONERROR, true);
-$content = curl_exec($ch);
-curl_close($ch);
+foreach ($contentUrls as $contentUrl) {
+    sleep(5);
 
-$offset = 0;
+    logMessage('Downloading ' . $contentUrl);
 
-while (($blockBegin = strpos($content, '<td class="msga2"><a href="', $offset)) !== FALSE) {
-    $blockEnd = strpos($content, '</tr>', $blockBegin);
-    $block = substr($content, $blockBegin, $blockEnd - $blockBegin);
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $contentUrl);
+    if (!empty($postStr)) {
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $postStr);
+    }
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 0); 
+    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+    curl_setopt($ch, CURLOPT_FAILONERROR, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_FORBID_REUSE, false);
+    curl_setopt($ch, CURLOPT_FRESH_CONNECT, false);
+    curl_setopt($ch, CURLOPT_AUTOREFERER, 1);
+    curl_setopt($ch, CURLOPT_COOKIEFILE, '');
+    $content = curl_exec($ch);
+    curl_close($ch);
 
-    if (preg_match('/class="am" href="([^"]+)">(<b>)?([^<]+)/', $block, $matches)) {
-        $url = $matches[1];
-        $title = $matches[3];
+    $offset = 0;
 
-        if (strpos($url, 'http') !== 0)
-            $url = 'https://www.ss.lv' . $url;
-    
-        if (preg_match('/\/([^\.\/]+)\.html$/', $url, $matches)) {
-            $id = $matches[1];
-            if (strpos($block, '€/день') === FALSE) {
-                if (!in_array($id, $scannedIds)) {
-                    $subject = 'SS.LV: ' . $title;
-                    $body = $url;
+    while (($blockBegin = strpos($content, '<td class="msga2"><a href="', $offset)) !== FALSE) {
+        $blockEnd = strpos($content, '</tr>', $blockBegin);
+        $block = substr($content, $blockBegin, $blockEnd - $blockBegin);
 
-                    logMessage($url);
+        if (preg_match('/class="am" href="([^"]+)">(<b>)?([^<]+)/', $block, $matches)) {
+            $url = $matches[1];
+            $title = $matches[3];
 
-                    logMessage('New record found, sending email: ' . $subject);
+            if (strpos($url, 'http') !== 0)
+                $url = 'https://www.ss.lv' . $url;
+        
+            if (preg_match('/\/([^\.\/]+)\.html$/', $url, $matches)) {
+                $id = $matches[1];
+                if (strpos($block, '€/dienā') === FALSE) {
+                    if (!in_array($id, $scannedIds)) {
+                        $subject = 'SS.LV: ' . $title;
+                        $body = $url;
 
-                    $message = Swift_Message::newInstance($subject)
-                        ->setFrom(array('ropez.erik.test@gmail.com'))
-                        ->setTo(array('ropez.erik@gmail.com', 'zvirbulekristine@gmail.com'))
-                        ->setBody($body);
+                        logMessage($url);
 
-                    if ($mailer->send($message)) {
-                        $scannedIds[] = $id;
-                        file_put_contents($dbFile, serialize($scannedIds));
-                    } else {
-                        logMessage('Failed to send email, will try again later');
-                    }
-                }   
+                        logMessage('New record found, sending email: ' . $subject);
+
+                        $message = Swift_Message::newInstance($subject)
+                            ->setFrom(array('ropez.erik.test@gmail.com'))
+                            ->setTo(array('a.conello@gmail.com', 'cipinnss66@inbox.lv'))
+                            ->setBody($body);
+
+                        if ($mailer->send($message)) {
+                            $scannedIds[] = $id;
+                            file_put_contents($dbFile, serialize($scannedIds));
+                        } else {
+                            logMessage('Failed to send email, will try again later');
+                        }
+                    }   
+                }
+            } else {
+                logMessage('Cannot find ID in URL: ' . $url);
             }
         } else {
-            logMessage('Cannot find ID in URL: ' . $url);
+            logMessage('Cannot find URL and title in the block:' . PHP_EOL . $block);
         }
-    } else {
-        logMessage('Cannot find URL and title in the block:' . PHP_EOL . $block);
-    }
 
-    $offset = $blockEnd;
+        $offset = $blockEnd;
+    }
 }
 
 function logMessage($message)
