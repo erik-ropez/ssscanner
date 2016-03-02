@@ -3,8 +3,8 @@
 require __DIR__.'/vendor/autoload.php';
 
 $transport = Swift_SmtpTransport::newInstance('ssl://smtp.gmail.com', 465)
-    ->setUsername('ropez.erik.test@gmail.com')
-    ->setPassword('TrorreySheet');
+    ->setUsername('username@gmail.com')
+    ->setPassword('password');
 
 $mailer = Swift_Mailer::newInstance($transport);
 
@@ -89,8 +89,8 @@ foreach ($contentUrls as $contentUrl) {
                         logMessage('New record found, sending email: ' . $subject);
 
                         $message = Swift_Message::newInstance($subject)
-                            ->setFrom(array('ropez.erik.test@gmail.com'))
-                            ->setTo(array('a.conello@gmail.com', 'cipinnss66@inbox.lv'))
+                            ->setFrom(array('from@gmail.com'))
+                            ->setTo(array('to1@gmail.com', 'to2@inbox.lv'))
                             ->setBody($body);
 
                         if ($mailer->send($message)) {
