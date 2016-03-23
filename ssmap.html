@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>SS.LV Map</title>
+  <meta name="description" content="SS.LV content placed on the map">
+
+  <!-- <link rel="stylesheet" href="css/styles.css?v=1.0"> -->
+
+  <!--[if lt IE 9]>
+  <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+  <![endif]-->
+
+  <script src="https://code.jquery.com/jquery-2.2.2.min.js" integrity="sha256-36cp2Co+/62rEAAYHLmRCPIych47CvdM+uTBJwSzWjI=" crossorigin="anonymous"></script>
+
+  <style type="text/css">
+    body { margin: 0; }
+  </style>
+
+</head>
+
+<body>
+  <div id="map"></div>
+
+  <script>
+  
+  $(function() {
+    
+    var hex = function(x) {
+      return ("0" + parseInt(x).toString(16)).slice(-2);
+    };
+
+    var rgb2hex = function(r, g, b) {
+      return "#" + hex(r * 255) + hex(g * 255) + hex(b * 255);
+    };
+
+    var resizeMap = function() {
+      $("#map").css({
+        width: $(window).width(),
+        height: $(window).height()
+      });
+    };
+
+    $(window).resize(resizeMap);
+    resizeMap();
+   
+    var map = new GMaps({
+          el: '#map',
+          lat: 56.9489,
+          lng: 24.1064,
+          zoom: 8
+    });
+
+    GMaps.geolocate({
+      success: function(position) {
+        map.setCenter(position.coords.latitude, position.coords.longitude);
+      }
+    });
+
+    $.get("https://www.ss.lv/lv/real-estate/plots-and-lands/daugavpils-and-reg/today-5/sell/", function(data) {
+      var offset = 0;
+      var blockBegin;
+      while ((blockBegin = data.indexOf('<td class="msga2"><a href="', offset)) >= 0) {
+        var blockEnd = data.indexOf('</tr>', blockBegin);
+        var block = data.substring(blockBegin, blockEnd);
+
+        var matches = block.match(/class="am" href="([^"]+)">(<b>)?([^<]+)/im);
+        var url = matches[1];
+        var title = matches[3];
+
+        if (url.indexOf('http') != 0)
+            url = 'https://www.ss.lv' + url;
+
+        $.get(url, function (data) {
+          var matches = data.match(/&c=([0-9\.]+), ([0-9\.]+),/im);
+          var lat = matches[1];
+          var lng = matches[2];
+
+          var matches = data.match(/var MSG_PRICE = ([0-9\.]+);/im);
+          var price = matches[1];
+
+          var matches = data.match(/Platība:<\/td><td[^>]+>([0-9\.]+) ([^<]+)</im);
+          var spaceM2 = matches[1];
+          var spaceMetric = matches[2];
+          if (spaceMetric == 'ha.')
+            spaceM2 *= 10000;
+
+          radius = Math.sqrt(spaceM2 / Math.PI);
+          pricePerM2 = price / spaceM2;
+
+          var priceInRange = Math.log(pricePerM2 * 10) / Math.LN10
+          priceInRange /= 2; // 10 per sqm is a max we consider; ln(10 * 10) = 2, so we divide by two to get into range of 1.
+          if (priceInRange < 0)
+            priceInRange = 0;
+          if (priceInRange > 1)
+            priceInRange = 1;
+          var color = rgb2hex(priceInRange, 1 - priceInRange, 0);
+
+          console.log([price, spaceM2, spaceMetric, radius, pricePerM2, priceInRange]);
+
+          map.drawCircle({
+            lat: lat,
+            lng: lng,
+            radius: radius * 10,
+            strokeOpacity: 0,
+            fillColor: color,
+            fillOpacity: 0.6
+          });
+
+        });
+        
+        offset = blockEnd;
+      }
+    });
+
+  });
+  
+  </script>
+  <script src="http://maps.google.com/maps/api/js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gmaps.js/0.4.23/gmaps.min.js"></script>
+</body>
+</html>
